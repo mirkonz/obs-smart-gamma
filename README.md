@@ -78,7 +78,7 @@ cmake --preset windows-x64
 cmake --build --preset windows-x64 --config RelWithDebInfo
 cmake --install build_x64 --config RelWithDebInfo --prefix dist/windows-x64
 ```
-This preset configures the right toolset, pulls obs-deps + Qt6, and installs into `dist/windows-x64/smart-gamma`. Copy that tree into `%APPDATA%/obs-studio/plugins` or your OBS install directory.
+This preset configures the right toolset, pulls obs-deps + Qt6, and installs into `dist/windows-x64/smart-gamma`. Copy that tree into `%ProgramData%/obs-studio/plugins` or your OBS install directory.
 
 ### Ubuntu 24.04 / Linux
 ```bash
@@ -95,7 +95,7 @@ Linux builds use Ninja with `RelWithDebInfo` and install the `.so` into `dist/li
 
 ### Packaging
 - macOS: the install step already emits `smart-gamma.pkg`; wrap it in a DMG with `scripts/create-dmg.sh "<install-prefix>" dist/smart-gamma-macos.dmg` if desired.
-- Windows: releases now ship a `smart-gamma-<version>-windows-x64.exe` installer. Generate the same installer locally by running `powershell ./scripts/create-windows-installer.ps1 -SourceDir dist/windows-x64 -OutputExe dist/smart-gamma-windows.exe`.
+- Windows: install [NSIS](https://nsis.sourceforge.io/Download) (so `makensis` is on `PATH`) and run `powershell ./scripts/create-windows-installer.ps1 -SourceDir dist/windows-x64 -OutputExe dist/smart-gamma-windows.exe -ProductVersion <semver>`. The script feeds the payload to NSIS, which emits a standard wizard that defaults to `%ProgramData%/obs-studio/plugins/smart-gamma` and offers a directory picker + uninstaller entry.
 - Any platform: `scripts/package.sh <build-dir> <platform-tag> [output-dir]` zips an install tree (e.g., `scripts/package.sh build_x86_64 linux-x86_64 dist`).
 
 ## Testing Checklist

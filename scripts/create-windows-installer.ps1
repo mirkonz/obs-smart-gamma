@@ -3,174 +3,115 @@ param (
     [string]$SourceDir,
     [Parameter(Mandatory)]
     [string]$OutputExe,
-    [string]$ProductName = "Smart Gamma"
+    [string]$ProductName = "Smart Gamma",
+    [string]$ProductVersion = "0.0.0",
+    [string]$InstallSubdir = "smart-gamma"
 )
 
-function Find-FrameworkAssembly {
-    param(
-        [Parameter(Mandatory)]
-        [string]$AssemblyFileName
-    )
+function Resolve-FourPartVersion {
+    param([string]$Version)
+    if (-not $Version) {
+        return "0.0.0.0"
+    }
+    $parts = $Version.Split('.', [System.StringSplitOptions]::RemoveEmptyEntries)
+    if ($parts.Count -eq 0) {
+        $parts = @("0")
+    }
+    while ($parts.Count -lt 4) {
+        $parts += "0"
+    }
+    if ($parts.Count -gt 4) {
+        $parts = $parts[0..3]
+    }
+    return ($parts -join '.')
+}
 
-    $roots = @(
-        (Join-Path ${env:ProgramFiles(x86)} "Reference Assemblies/Microsoft/Framework/.NETFramework"),
-        (Join-Path ${env:ProgramFiles} "Reference Assemblies/Microsoft/Framework/.NETFramework"),
-        (Join-Path ${env:WINDIR} "Microsoft.NET/assembly/GAC_MSIL")
-    )
-    $versions = @("v4.8","v4.7.2","v4.7.1","v4.7","v4.6.2","v4.6.1","v4.6","v4.5.2","v4.5.1","v4.5","v4.0")
+function Find-Makensis {
+    $candidates = @(
+        $env:MAKENSIS,
+        (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe"),
+        (Join-Path ${env:ProgramFiles} "NSIS\makensis.exe"),
+        "makensis.exe"
+    ) | Where-Object { $_ }
 
-    foreach ($root in $roots) {
-        foreach ($version in $versions) {
-            $candidate = Join-Path (Join-Path $root $version) $AssemblyFileName
-            if (Test-Path $candidate) {
-                return $candidate
-            }
+    foreach ($candidate in $candidates) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($cmd) {
+            return $cmd.Source
         }
     }
-
     return $null
 }
 
 if (-not (Test-Path $SourceDir)) {
-    Write-Error "Source directory $SourceDir not found"
-    exit 1
+    throw "Source directory '$SourceDir' not found."
 }
 
 $resolvedSourceDir = (Resolve-Path -Path $SourceDir).ProviderPath
-
-Write-Host "Preparing Smart Gamma installer..."
-
-$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
-New-Item -ItemType Directory -Path $tempDir | Out-Null
-
 $resolvedOutputExe = if ([System.IO.Path]::IsPathRooted($OutputExe)) {
     [System.IO.Path]::GetFullPath($OutputExe)
 } else {
     [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputExe))
 }
+
 $outputDir = Split-Path -Parent $resolvedOutputExe
 if ($outputDir -and -not (Test-Path $outputDir)) {
     New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 }
-if (Test-Path $resolvedOutputExe) {
-    Remove-Item -Force $resolvedOutputExe
-}
 
-try {
-    $packageDir = Join-Path $tempDir "package"
-    mkdir $packageDir | Out-Null
-
-    $zipPath = Join-Path $packageDir "smart-gamma.zip"
-    Write-Host "Compressing payload from $SourceDir..."
-    Compress-Archive -Path (Join-Path $resolvedSourceDir "*") -DestinationPath $zipPath -Force
-    $zipPath = [System.IO.Path]::GetFullPath($zipPath)
-
-    $stubPath = Join-Path $tempDir "InstallerStub.cs"
-    @'
-using System;
-using System.IO;
-using System.IO.Compression;
-using System.Reflection;
-
-class Installer
-{
-    static void Main()
-    {
-        try
-        {
-            string destRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "obs-studio");
-            ExtractPayload(destRoot);
-            Console.WriteLine("Smart Gamma installed to " + destRoot);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(ex.ToString());
-        }
-    }
-
-    static void ExtractPayload(string destRoot)
-    {
-        Assembly assembly = Assembly.GetExecutingAssembly();
-        using (Stream resource = assembly.GetManifestResourceStream("Payload.zip"))
-        {
-            if (resource == null)
-                throw new InvalidOperationException("Missing embedded payload.");
-
-            using (ZipArchive archive = new ZipArchive(resource))
-            {
-                string destRootFull = Path.GetFullPath(destRoot);
-                foreach (ZipArchiveEntry entry in archive.Entries)
-                {
-                    string entryPath = entry.FullName ?? string.Empty;
-                    string targetPath = Path.GetFullPath(Path.Combine(destRootFull, entryPath));
-                    if (!targetPath.StartsWith(destRootFull, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    if (string.IsNullOrEmpty(entry.Name))
-                    {
-                        Directory.CreateDirectory(targetPath);
-                        continue;
-                    }
-
-                    string dir = Path.GetDirectoryName(targetPath);
-                    if (!string.IsNullOrEmpty(dir))
-                        Directory.CreateDirectory(dir);
-
-                    entry.ExtractToFile(targetPath, true);
-                }
-            }
-        }
+$payloadRoot = $resolvedSourceDir
+$childDirectories = Get-ChildItem -Path $resolvedSourceDir -Directory -ErrorAction SilentlyContinue
+if ($childDirectories.Count -eq 1) {
+    $payloadRootCandidate = $childDirectories[0].FullName
+    $hasObsBin = Test-Path (Join-Path $payloadRootCandidate "bin")
+    $hasObsPlugins = Test-Path (Join-Path $payloadRootCandidate "obs-plugins")
+    if ($hasObsBin -or $hasObsPlugins) {
+        $payloadRoot = $payloadRootCandidate
     }
 }
-'@ | Set-Content -Encoding UTF8 $stubPath
 
-    $cscCandidates = @(
-        (Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319\csc.exe"),
-        (Join-Path $env:WINDIR "Microsoft.NET\Framework\v4.0.30319\csc.exe"),
-        (Join-Path $env:WINDIR "Microsoft.NET\Framework64\v3.5\csc.exe"),
-        (Join-Path $env:WINDIR "Microsoft.NET\Framework\v3.5\csc.exe"),
-        "csc.exe"
+if (-not (Get-ChildItem -Path $payloadRoot -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer })) {
+    throw "Payload directory '$payloadRoot' is empty. Did you run 'cmake --install ... --prefix $SourceDir' first?"
+}
+
+$makensis = Find-Makensis
+if (-not $makensis) {
+    throw "Unable to locate makensis.exe. Please install NSIS and ensure makensis is in PATH or set the MAKENSIS environment variable."
+}
+
+$defaultInstallRoot = Join-Path ([Environment]::GetFolderPath("CommonApplicationData")) "obs-studio\plugins"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$nsiPath = Join-Path $scriptDir "create-windows-installer.nsi"
+if (-not (Test-Path $nsiPath)) {
+    throw "Unable to find installer script at $nsiPath"
+}
+
+function New-DefineArgument {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][object]$Value
     )
-    $compiler = $null
-    foreach ($candidate in $cscCandidates) {
-        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($cmd) {
-            $compiler = $cmd.Source
-            break
-        }
-    }
-    if (-not $compiler) {
-        throw "Unable to locate csc.exe on this system"
-    }
-
-    $compressionCoreRef = Find-FrameworkAssembly -AssemblyFileName "System.IO.Compression.dll"
-    if (-not $compressionCoreRef) {
-        $compressionCoreRef = Join-Path ${env:WINDIR} "Microsoft.NET\Framework64\v4.0.30319\System.IO.Compression.dll"
-        if (-not (Test-Path $compressionCoreRef)) {
-            $compressionCoreRef = Join-Path ${env:WINDIR} "Microsoft.NET\Framework\v4.0.30319\System.IO.Compression.dll"
-        }
-    }
-    $compressionFsRef = Find-FrameworkAssembly -AssemblyFileName "System.IO.Compression.FileSystem.dll"
-    if (-not $compressionFsRef) {
-        $compressionFsRef = Join-Path ${env:WINDIR} "Microsoft.NET\Framework64\v4.0.30319\System.IO.Compression.FileSystem.dll"
-        if (-not (Test-Path $compressionFsRef)) {
-            $compressionFsRef = Join-Path ${env:WINDIR} "Microsoft.NET\Framework\v4.0.30319\System.IO.Compression.FileSystem.dll"
-        }
-    }
-    if (-not (Test-Path $compressionCoreRef) -or -not (Test-Path $compressionFsRef)) {
-        throw "Unable to locate compression assemblies for csc compilation"
-    }
-
-    Write-Host "Compiling embedded installer with csc..."
-    & $compiler /nologo /target:winexe /optimize+ "/out:$resolvedOutputExe" "/resource:$zipPath,Payload.zip" "/reference:$compressionCoreRef" "/reference:$compressionFsRef" $stubPath
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $resolvedOutputExe)) {
-        throw "Failed to compile installer executable"
-    }
-
-    Write-Host "Created installer: $resolvedOutputExe"
+    $valueString = if ($null -eq $Value) { '' } else { [string]$Value }
+    $escaped = $valueString.Replace('"', '\"')
+    return "/D$Name=$escaped"
 }
-finally {
-    if (Test-Path $tempDir) {
-        Remove-Item -Recurse -Force $tempDir
-    }
+
+$defines = @(
+    New-DefineArgument -Name "PRODUCT_NAME" -Value $ProductName
+    New-DefineArgument -Name "PRODUCT_VERSION" -Value (Resolve-FourPartVersion -Version $ProductVersion)
+    New-DefineArgument -Name "SOURCE_ROOT" -Value $payloadRoot
+    New-DefineArgument -Name "OUTPUT_EXE" -Value $resolvedOutputExe
+    New-DefineArgument -Name "INSTALL_ROOT" -Value $defaultInstallRoot
+    New-DefineArgument -Name "INSTALL_SUBDIR" -Value $InstallSubdir
+)
+
+Write-Host "Building NSIS wizard installer..."
+Write-Host " - Payload: $payloadRoot"
+Write-Host " - Output : $resolvedOutputExe"
+
+& $makensis @defines $nsiPath
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $resolvedOutputExe)) {
+    throw "makensis failed to create installer (exit code $LASTEXITCODE)."
 }
+
+Write-Host "Created installer: $resolvedOutputExe"

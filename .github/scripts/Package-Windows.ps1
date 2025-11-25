@@ -44,8 +44,13 @@ function Package {
     }
 
     $BuildSpec = Get-Content -Path ${BuildSpecFile} -Raw | ConvertFrom-Json
-    $ProductName = $BuildSpec.name
-    $ProductVersion = $BuildSpec.version
+    $ProductName = [string]$BuildSpec.name
+    $ProductDisplayName = if ($BuildSpec.PSObject.Properties.Name -contains 'displayName' -and $BuildSpec.displayName) {
+        [string]$BuildSpec.displayName
+    } else {
+        $ProductName
+    }
+    $ProductVersion = [string]$BuildSpec.version
 
     $OutputName = "${ProductName}-${ProductVersion}-windows-${Target}"
     $InstallerScript = "${ProjectRoot}/scripts/create-windows-installer.ps1"
@@ -74,7 +79,8 @@ function Package {
     & "$InstallerScript" `
         -SourceDir "$InstallDir" `
         -OutputExe "$OutputExe" `
-        -ProductName "$ProductName"
+        -ProductName "$ProductDisplayName" `
+        -ProductVersion "$ProductVersion"
     Log-Group
 }
 
