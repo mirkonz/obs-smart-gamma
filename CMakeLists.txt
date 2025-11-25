@@ -43,7 +43,7 @@ target_compile_definitions(
   PRIVATE
     SMART_GAMMA_VERSION="${PROJECT_VERSION}"
     "SMART_GAMMA_AUTHOR=\"${PLUGIN_AUTHOR}\""
-    "SMART_GAMMA_REPO=\"https://github.com/mirkonz/obs-smart-gamma\""
+    "SMART_GAMMA_REPO=\"https://github.com/mirkonz/smart-gamma\""
 )
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})

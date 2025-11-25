@@ -5,6 +5,9 @@ on:
       pluginName:
         description: Project name detected by parsing build spec file
         value: ${{ jobs.check-event.outputs.pluginName }}
+      pluginVersion:
+        description: Project version detected from buildspec or tag
+        value: ${{ jobs.check-event.outputs.pluginVersion }}
 jobs:
   check-event:
     name: Check GitHub Event Data 🔎
@@ -19,6 +22,7 @@ jobs:
       config: ${{ steps.setup.outputs.config }}
       commitHash: ${{ steps.setup.outputs.commitHash }}
       pluginName: ${{ steps.setup.outputs.pluginName }}
+      pluginVersion: ${{ steps.setup.outputs.pluginVersion }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,12 +68,21 @@ jobs:
 
           plugin_name="$(grep 'name' buildspec.json | sed -E -e 's/^.+"name":[^"]+"(.+)",?$/\1/g')"
           plugin_display_name="$(grep 'displayName' buildspec.json | sed -E -e 's/^.+"displayName":[^"]+"(.+)",?$/\1/g' || echo "")"
+          plugin_version="$(jq -r '.version' buildspec.json)"
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            candidate="${GITHUB_REF_NAME#v}"
+            if [[ "${candidate}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              plugin_version="${candidate}"
+            fi
+          fi
 
           if [[ "${plugin_display_name}" ]]; then
             echo "pluginName=${plugin_display_name}" >> $GITHUB_OUTPUT
           else
             echo "pluginName=${plugin_name}" >> $GITHUB_OUTPUT
           fi
+          echo "pluginVersion=${plugin_version}" >> $GITHUB_OUTPUT
 
   macos-build:
     name: Build for macOS 🍏
@@ -78,6 +91,8 @@ jobs:
     defaults:
       run:
         shell: zsh --no-rcs --errexit --pipefail {0}
+    env:
+      PLUGIN_VERSION_OVERRIDE: ${{ needs.check-event.outputs.pluginVersion }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -108,6 +123,9 @@ jobs:
           local product_version
           read -r product_name product_version <<< \
             "$(jq -r '. | {name, version} | join(" ")' buildspec.json)"
+          if [[ -n ${PLUGIN_VERSION_OVERRIDE:-} ]]; then
+            product_version="${PLUGIN_VERSION_OVERRIDE}"
+          fi
 
           print "pluginName=${product_name}" >> $GITHUB_OUTPUT
           print "pluginVersion=${product_version}" >> $GITHUB_OUTPUT
@@ -185,6 +203,8 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      PLUGIN_VERSION_OVERRIDE: ${{ needs.check-event.outputs.pluginVersion }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -199,6 +219,9 @@ jobs:
 
           read -r product_name product_version <<< \
             "$(jq -r '. | {name, version} | join(" ")' buildspec.json)"
+          if [[ -n "${PLUGIN_VERSION_OVERRIDE:-}" ]]; then
+            product_version="${PLUGIN_VERSION_OVERRIDE}"
+          fi
 
           echo "pluginName=${product_name}" >> $GITHUB_OUTPUT
           echo "pluginVersion=${product_version}" >> $GITHUB_OUTPUT
@@ -256,6 +279,8 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    env:
+      PLUGIN_VERSION_OVERRIDE: ${{ needs.check-event.outputs.pluginVersion }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -273,6 +298,9 @@ jobs:
           $BuildSpec = Get-Content -Path buildspec.json -Raw | ConvertFrom-Json
           $ProductName = $BuildSpec.name
           $ProductVersion = $BuildSpec.version
+          if ($Env:PLUGIN_VERSION_OVERRIDE) {
+            $ProductVersion = $Env:PLUGIN_VERSION_OVERRIDE
+          }
 
           "pluginName=${ProductName}" >> $env:GITHUB_OUTPUT
           "pluginVersion=${ProductVersion}" >> $env:GITHUB_OUTPUT

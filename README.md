@@ -8,11 +8,11 @@
   <img width="420" alt="Smart Gamma logo" src="./smart-gamma-logo.png">
 </picture>
 
-[![GitHub](https://img.shields.io/github/license/mirkonz/obs-smart-gamma)](https://github.com/mirkonz/obs-smart-gamma/blob/main/LICENSE)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/mirkonz/obs-smart-gamma/push.yaml?branch=main&label=push)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/mirkonz/obs-smart-gamma)](https://github.com/mirkonz/obs-smart-gamma/releases/latest)
-![GitHub Release Date](https://img.shields.io/github/release-date/mirkonz/obs-smart-gamma?display_date=published_at)
-[![Total downloads](https://img.shields.io/github/downloads/mirkonz/obs-smart-gamma/total)](https://github.com/mirkonz/obs-smart-gamma/releases)
+[![GitHub](https://img.shields.io/github/license/mirkonz/smart-gamma)](https://github.com/mirkonz/smart-gamma/blob/main/LICENSE)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/mirkonz/smart-gamma/push.yaml?branch=main&label=push)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/mirkonz/smart-gamma)](https://github.com/mirkonz/smart-gamma/releases/latest)
+![GitHub Release Date](https://img.shields.io/github/release-date/mirkonz/smart-gamma?display_date=published_at)
+[![Total downloads](https://img.shields.io/github/downloads/mirkonz/smart-gamma/total)](https://github.com/mirkonz/smart-gamma/releases)
 </div>
 
 ## Smart Gamma — OBS Shader Filter

@@ -51,6 +51,9 @@ function Package {
         $ProductName
     }
     $ProductVersion = [string]$BuildSpec.version
+    if ($env:PLUGIN_VERSION_OVERRIDE -and $env:PLUGIN_VERSION_OVERRIDE.Trim()) {
+        $ProductVersion = $env:PLUGIN_VERSION_OVERRIDE
+    }
 
     $OutputName = "${ProductName}-${ProductVersion}-windows-${Target}"
     $InstallerScript = "${ProjectRoot}/scripts/create-windows-installer.ps1"

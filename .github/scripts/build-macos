@@ -92,6 +92,9 @@ build() {
   local product_version
   read -r product_name product_version <<< \
     "$(jq -r '. | {name, version} | join(" ")' ${buildspec_file})"
+  if [[ -n ${PLUGIN_VERSION_OVERRIDE:-} ]]; then
+    product_version=${PLUGIN_VERSION_OVERRIDE}
+  fi
 
   pushd ${project_root}
 

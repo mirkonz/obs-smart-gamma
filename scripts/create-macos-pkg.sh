@@ -2,8 +2,8 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-  echo "Usage: $0 <install-root> <output-pkg>" >&2
-  exit 1
+    echo "Usage: $0 <install-root> <output-pkg>" >&2
+    exit 1
 fi
 
 INSTALL_ROOT="$1"
@@ -11,38 +11,53 @@ OUTPUT_PKG="$2"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_SRC="${INSTALL_ROOT}/lib/obs-plugins/smart-gamma.so"
 DATA_SRC="${INSTALL_ROOT}/share/obs/obs-plugins/smart-gamma"
-PKG_IDENTIFIER="${PKG_IDENTIFIER:-com.mirkonz.obs-smart-gamma}"
+PKG_IDENTIFIER="${PKG_IDENTIFIER:-com.mirkonz.smart-gamma}"
 
 if [[ ! -f "$BIN_SRC" ]]; then
-  echo "Missing plugin binary at $BIN_SRC" >&2
-  exit 1
+    echo "Missing plugin binary at $BIN_SRC" >&2
+    exit 1
 fi
 
 if [[ ! -d "$DATA_SRC" ]]; then
-  echo "Missing plugin resources at $DATA_SRC" >&2
-  exit 1
+    echo "Missing plugin resources at $DATA_SRC" >&2
+    exit 1
 fi
 
 if command -v python3 >/dev/null 2>&1; then
-  PYTHON_BIN="python3"
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_BIN="python"
+    PYTHON_BIN="python3"
+    elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="python"
 else
-  echo "python3 or python is required to extract the project version" >&2
-  exit 1
+    echo "python3 or python is required to extract the project version" >&2
+    exit 1
 fi
 
-PROJECT_VERSION="$(
-  cd "$PROJECT_ROOT" && "$PYTHON_BIN" - <<'PY'
+if [[ -n "${PLUGIN_VERSION_OVERRIDE:-}" ]]; then
+    PROJECT_VERSION="${PLUGIN_VERSION_OVERRIDE}"
+else
+    PROJECT_VERSION="$(
+      cd "$PROJECT_ROOT" && "$PYTHON_BIN" - <<'PY'
+import json
 import pathlib
 import re
-cmake = pathlib.Path("CMakeLists.txt").read_text()
+
+root = pathlib.Path(".")
+spec_path = root / "buildspec.json"
+if spec_path.exists():
+    data = json.loads(spec_path.read_text())
+    version = data.get("version")
+    if version:
+        print(version, end="")
+        raise SystemExit(0)
+
+cmake = (root / "CMakeLists.txt").read_text()
 match = re.search(r'project\([^)]*VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)', cmake, re.IGNORECASE)
 if not match:
-    raise SystemExit("Unable to determine project version from CMakeLists.txt")
+    raise SystemExit("Unable to determine project version from buildspec.json or CMakeLists.txt")
 print(match.group(1), end="")
 PY
-)"
+    )"
+fi
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -86,11 +101,11 @@ EOF
 mkdir -p "$(dirname "$OUTPUT_PKG")"
 COMPONENT_PKG="${WORK_DIR}/smart-gamma-component.pkg"
 pkgbuild \
-  --root "${WORK_DIR}/pkgroot" \
-  --identifier "$PKG_IDENTIFIER" \
-  --version "$PROJECT_VERSION" \
-  --install-location "/" \
-  "$COMPONENT_PKG"
+--root "${WORK_DIR}/pkgroot" \
+--identifier "$PKG_IDENTIFIER" \
+--version "$PROJECT_VERSION" \
+--install-location "/" \
+"$COMPONENT_PKG"
 
 COMPONENT_NAME="$(basename "$COMPONENT_PKG")"
 DISTRIBUTION="${WORK_DIR}/Distribution.xml"
@@ -111,8 +126,8 @@ cat >"$DISTRIBUTION" <<EOF
 EOF
 
 productbuild \
-  --distribution "$DISTRIBUTION" \
-  --package-path "$WORK_DIR" \
-  "$OUTPUT_PKG"
+--distribution "$DISTRIBUTION" \
+--package-path "$WORK_DIR" \
+"$OUTPUT_PKG"
 
 echo "Created PKG (installs into current user's Library): $OUTPUT_PKG"

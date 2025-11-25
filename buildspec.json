@@ -33,12 +33,12 @@
     },
     "platformConfig": {
         "macos": {
-            "bundleId": "com.mirkonz.obs-smart-gamma"
+            "bundleId": "com.mirkonz.smart-gamma"
         }
     },
     "name": "smart-gamma",
     "displayName": "Smart Gamma",
-    "version": "0.1.0",
+    "version": "0.0.0",
     "author": "Mirko May",
     "website": "https://mirko.nz",
     "email": "hi@mirko.nz"
